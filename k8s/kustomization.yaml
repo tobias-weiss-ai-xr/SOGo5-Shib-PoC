@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+commonAnnotations:
+  example.org/build-date: '2026-08-03T12:00:00Z'
+  example.org/description: SOGo 5 - Groupware server with web interface, CalDAV, CardDAV, and ActiveSync
+  example.org/registry: registry.example.org
+configurations:
+- kustomizeconfig.yaml
+images:
+- name: registry.example.org/sogo5
+  newName: registry.example.org/sogo/sogo
+  newTag: bookworm-5.12.11-us4-r4
+- name: registry.example.org/sogo5-shibboleth-sp
+  newName: registry.example.org/shibboleth-sp/shibboleth-sp
+  newTag: 0.1.0
+kind: Kustomization
+labels:
+- includeSelectors: false
+  pairs:
+    app.kubernetes.io/component: mail-calendar-contacts
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/part-of: sogo5-sso
+    app.kubernetes.io/version: 5.8.0
+    de.container.gov.component: sogo5
+    example.org/component: mail-calendar-contacts
+    example.org/version: 5.8.0
+patches: null
+resources:
+- namespace.yaml
+- configmap.yaml
+- pvc.yaml
+- deployment.yaml
+- service.yaml
+- shibboleth/sogo5-shib-configmap.yaml
+- shibboleth/sogo5-shib-ingress.yaml
+- netpol-mail-sso-targets.yaml

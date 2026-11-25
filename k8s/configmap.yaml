@@ -1,0 +1,27 @@
+apiVersion: v1
+data:
+  GNUstep.conf: "{\n  NSGlobalDomain = {\n    GSDebugResourceLoading = NO;\n  };\n}\n"
+  healthcheck.sh: '#!/bin/bash
+
+    set -euo pipefail
+
+    curl -fsS -o /dev/null "http://127.0.0.1:20000/SOGo"
+
+    echo "SOGo is healthy"
+
+    '
+  ports.conf: 'Listen 8080
+
+    '
+  sogo.conf.tmpl: "{\n  \n  /* Database Configuration (rendered via envsubst by init container) */\n  SOGoProfileURL = \"mysql://sogo5:${DB_PASSWORD}@${DB_HOST}:3306/sogo5/sogo_user_profile\";\n  OCSOpenIdURL = \"mysql://sogo5:${DB_PASSWORD}@${DB_HOST}:3306/sogo5/sogo_openid_session\";\n  OCSFolderInfoURL = \"mysql://sogo5:${DB_PASSWORD}@${DB_HOST}:3306/sogo5/sogo_folder_info\";\n  OCSSessionsFolderURL = \"mysql://sogo5:${DB_PASSWORD}@${DB_HOST}:3306/sogo5/sogo_sessions_folder\";\n  OCSAclURL = \"mysql://sogo5:${DB_PASSWORD}@${DB_HOST}:3306/sogo5/sogo_acl\";\n\n  /* Email domains / host */\n  OCSEMailDomains = (\"example.org\", \"example.org\");\n  SOGoHostName = \"${SOGO_HOSTNAME}\";\n  SOGoMailDomain = \"example.org\";\n\n  /* LDAP user source */\n  SOGoUserSources = (\n    {\n      id = mail-ldap;\n      type = ldap;\n      hostname = \"ldap://${LDAP_HOST}:389\";\n      baseDN = \"ou=People,${LDAP_BASE_DN}\";\n      bindFields = (uid, mail);\n      bindDN = \"${LDAP_BIND_DN}\";\n      bindPassword = \"${LDAP_BIND_PASSWORD}\";\n      idFieldName = uid;\n      UIDFieldName = uid;\n      CNFieldName = cn;\n      base = \"${LDAP_BASE_DN}\";\n      scope = SUB;\n      isAddressBook = YES;\n      displayName = \"Example Directory\";\n      canAuthenticate = YES;\n      timeout = 10;\n      maxRetryCount = 3;\n    }\n  );\n\n  /* Mail Server Configuration */\n  SOGoIMAPServer = \"imaps://${IMAP_HOST}:993/?tls=NO&tlsVerifyMode=none\";\n  SOGoSMTPServer = \"smtp://${SMTP_HOST}:587\";\n  SOGoSieveServer = \"sieve://${SIEVE_HOST}:4190\";\n  SOGoIMAPEncryption = YES;\n  SOGoSMTPEncryption = YES;\n  SOGoMailingMechanism = smtp;\n\n  /* Session store: default SQL (OCSSessionsFolderURL). Do NOT enable\n     NOTE: memcached sidecar present (supervisord has\n     no memcached program), it just produces 'SERVER HAS FAILED' errors. */\n\n  /* Performance */\n  SOGoMemcachedHost = \"127.0.0.1:11211\";\n  WOWorkersCount = 10;\n  SOGoMaximumDBConnections = 20;\n\n  /* Security */\n  SOGoSuperUsernames = (\"admin\");\n  SOGoSecureSessionCookies = YES;\n  SOGoXSRFValidationEnabled = NO;\n  NGImap4AuthMechanism = \"xoauth2\";\n  SOGoSMTPAuthenticationType = \"xoauth2\";\n  SOGoOpenIdConfigUrl = \"https://id.example.org/realms/sogo5/.well-known/openid-configuration\";\n  SOGoOpenIdClient = \"sogo\";\n  SOGoOpenIdClientSecret = \"${SOGO_OIDC_CLIENT_SECRET}\";\n  SOGoOpenIdScope = \"openid%20email%20profile\";\n  SOGoAuthenticationType = \"openid\";\n  SOGoOpenIdEmailParam = \"email\";\n  SOGoOpenIdEnableRefreshToken = YES;\n  SOGoOpenIdTokenCheckInterval = 600;\n\n  /* Locale */\n  SOGoLanguage = German;\n  SOGoTimeZone = Europe/Berlin;\n}\n"
+  startup-probe.sh: "#!/bin/bash\nset -euo pipefail\nfor i in $(seq 1 60); do\n  if curl -fsS -o /dev/null \"http://127.0.0.1:20000/SOGo\"; then\n    echo \"SOGo is up after ${i} attempts\"\n    exit 0\n  fi\n  sleep 5\ndone\necho \"SOGo failed to start within 300s\" >&2\nexit 1\n"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/part-of: sogo5-sso
+    de.container.gov.component: sogo5
+  name: sogo5-config
+  namespace: sogo5

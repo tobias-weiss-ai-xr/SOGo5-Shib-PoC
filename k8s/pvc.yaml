@@ -1,0 +1,158 @@
+# SOGo 5 Persistent Volume Claims
+# SPDX-License-Identifier: Apache-2.0
+#
+# SOGo 5 requires persistent storage for:
+# - User data (emails, calendars, contacts)
+# - Log files
+# - Session data
+# - Attachments
+#
+# Storage classes available:
+# - ceph-rbd: Fast SSD storage (RWO) - recommended for databases
+# - ceph-cephfs: Erasure-coded HDD storage (RWX) - for shared data
+#
+---
+# PVC for SOGo user data (RWO)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sogo5-data
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: data
+    app.kubernetes.io/part-of: sogo5-sso
+    app.kubernetes.io/managed-by: kustomize
+    
+    example.org/pvc-type: data
+    example.org/backup: "k8up-daily"
+    
+    de.container.gov.component: sogo5
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 50Gi
+  
+  storageClassName: ceph-rbd
+  
+  volumeMode: Filesystem
+
+---
+# PVC for SOGo logs (RWO)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sogo5-logs
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: logs
+    
+    example.org/pvc-type: logs
+    example.org/backup: "k8up-daily"
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 10Gi
+  
+  storageClassName: ceph-rbd
+  
+  volumeMode: Filesystem
+
+---
+# PVC for SOGo sessions (Redis/memcached alternative)
+# Note: SOGo primarily uses memcached (in-memory) for sessions
+# This PVC is for persistent session storage if configured
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sogo5-sessions
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: sessions
+    
+    example.org/pvc-type: sessions
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 1Gi
+  
+  storageClassName: ceph-rbd
+  
+  volumeMode: Filesystem
+
+---
+# PVC for SOGo attachments
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sogo5-attachments
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: attachments
+    
+    example.org/pvc-type: attachments
+    example.org/backup: "k8up-daily"
+    
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 100Gi
+  
+  storageClassName: ceph-rbd
+  
+  volumeMode: Filesystem
+
+---
+# PVC for SOGo temp files
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sogo5-tmp
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: tmp
+    
+    example.org/pvc-type: tmp
+    example.org/backup: "false"  # Temp files don't need backup
+
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 5Gi
+  
+  storageClassName: ceph-rbd
+  
+  volumeMode: Filesystem

@@ -1,0 +1,4 @@
+{
+  "args": ["--window-size=1100,1400", "--no-sandbox"],
+  "defaultViewport": { "width": 1100, "height": 1400, "deviceScaleFactor": 1 }
+}

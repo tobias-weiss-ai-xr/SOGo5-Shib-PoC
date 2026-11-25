@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    haproxy.org/server-ssl: 'true'
+  labels:
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: sogo5-shibboleth
+    app.kubernetes.io/part-of: sogo5-sso
+    example.org/component: authentication
+  name: sogo5-shibboleth-ingress
+  namespace: sogo5
+spec:
+  ingressClassName: haproxy
+  rules:
+  - host: webmail.example.org
+    http:
+      paths:
+      - backend:
+          service:
+            name: sogo5-web
+            port:
+              number: 443
+        path: /SOGo
+        pathType: Prefix
+      - backend:
+          service:
+            name: sogo5-web
+            port:
+              number: 443
+        path: /SOGo.woa
+        pathType: Prefix
+      # Shibboleth SP endpoints (SSO initiator, ACS, Metadata, Status) must be
+      # reachable publicly so the IdP can redirect back after login.
+      - backend:
+          service:
+            name: sogo5-web
+            port:
+              number: 443
+        path: /Shibboleth.sso
+        pathType: Prefix
+  tls:
+  - hosts:
+    - webmail.example.org
+    secretName: mail-sso-wildcard-tls

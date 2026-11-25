@@ -1,0 +1,25 @@
+# SOGo 5 Namespace Configuration
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sogo5
+  labels:
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/version: "5.8.0"
+    app.kubernetes.io/component: mail
+    app.kubernetes.io/part-of: sogo5-sso
+    app.kubernetes.io/managed-by: kustomize
+    
+    # openDesk specific
+    example.org/component: mail-calendar-contacts
+    example.org/version: "5.8.0"
+    example.org/tier: backend
+    
+    # ZKI IT-Grundschutz
+    
+    # container.gov.de
+    de.container.gov.component: sogo5
+    de.container.gov.component-type: mail-server
+    de.container.gov.security-level: enhanced

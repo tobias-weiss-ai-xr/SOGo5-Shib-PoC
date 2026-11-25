@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PLACEHOLDER IdP metadata (PoC, IdP-agnostic). Keep shibd metadata-green
+     until the target federation onboarding delivers the real
+     metadata + signing cert. SSO redirects land on the placeholder host and
+     fail there BY DESIGN. Swap entityID + metadata when federation lands. -->
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+    entityID="https://idp.placeholder.example.org/shibboleth"
+    validUntil="2036-01-01T00:00:00Z">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDFormat>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        Location="https://idp.placeholder.example.org/SAML2/SSO/Redirect"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        Location="https://idp.placeholder.example.org/SAML2/SSO/POST"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>

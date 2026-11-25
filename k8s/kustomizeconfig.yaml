@@ -1,0 +1,4 @@
+# Kustomize configuration for SOGo5
+# SPDX-License-Identifier: Apache-2.0
+# This file is referenced by kustomization.yaml configurations entry
+

@@ -1,0 +1,54 @@
+# Cross-namespace egress targets for the SOGo5 PoC (ns sogo5 -> mail-sso)
+# SPDX-License-Identifier: Apache-2.0
+#
+# mail-sso runs default-deny-ingress; mariadb-galera and openldap only
+# accept traffic from explicitly listed namespaces. These two policies add
+# ns sogo5 as an allowed source. They are additive (multiple NetworkPolicies
+# on the same pods = union of allows) and intentionally separate from the
+# live-only `allow-edu-tenants-to-mariadb-galera` / `allow-keycloak-openldap`
+# policies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-sogo5-to-mariadb-galera
+  namespace: mail-sso
+  labels:
+    app.kubernetes.io/part-of: sogo5-sso
+    example.org/target-namespace: sogo5
+spec:
+  podSelector:
+    matchLabels:
+      app: mariadb-galera
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sogo5
+      ports:
+        - port: 3306
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-sogo5-to-openldap
+  namespace: mail-sso
+  labels:
+    app.kubernetes.io/part-of: sogo5-sso
+    example.org/target-namespace: sogo5
+spec:
+  podSelector:
+    matchLabels:
+      app: openldap
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sogo5
+      ports:
+        - port: 389
+          protocol: TCP

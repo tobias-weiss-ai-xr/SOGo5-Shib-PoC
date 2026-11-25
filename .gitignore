@@ -1,0 +1,7 @@
+# SP credentials stay local — never commit key material
+sp-*.key
+sp-*.crt
+
+# arc42-PDF-Zwischenprodukte
+docs/arc42/.build/
+

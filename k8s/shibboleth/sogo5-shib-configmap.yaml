@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sogo5-shibboleth-config
+  namespace: sogo5
+  labels:
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: sogo5-shibboleth
+    app.kubernetes.io/part-of: sogo5-sso
+    example.org/component: authentication
+data:
+  shibboleth2.xml: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!--\n  Shibboleth SP 3.x configuration for openDesk Edu SOGo5 sidecar.\n  SPDX-License-Identifier: Apache-2.0\n  Runtime overridden by ConfigMap mounts (deployment).\n  Built from the packaged example-shibboleth2.xml (validated against 3.x XSD).\n-->\n<SPConfig xmlns=\"urn:mace:shibboleth:3.0:native:sp:config\"\n    xmlns:conf=\"urn:mace:shibboleth:3.0:native:sp:config\"\n    xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\"\n    clockSkew=\"180\">\n\n    <OutOfProcess logger=\"shibd.logger\"/>\n    <InProcess logger=\"native.logger\"/>\n\n    <UnixListener address=\"shibd.sock\"/>\n\n    <StorageService type=\"Memory\" id=\"mem\" cleanupInterval=\"900\"/>\n    <SessionCache type=\"StorageService\" StorageService=\"mem\" cacheAssertions=\"true\"\n                  cacheAllowance=\"900\" inprocTimeout=\"900\" cleanupInterval=\"900\"/>\n    <ReplayCache StorageService=\"mem\"/>\n    <ArtifactMap artifactTTL=\"180\"/>\n\n    <RequestMapper\
+    \ type=\"Native\">\n        <RequestMap>\n            <Host name=\"webmail.example.org\">\n                <Path name=\"sogo-secure\" authType=\"shibboleth\" requireSession=\"true\"/>\n            </Host>\n        </RequestMap>\n    </RequestMapper>\n\n    <ApplicationDefaults entityID=\"https://webmail.example.org/shibboleth-sp\"\n        REMOTE_USER=\"uid\"\n        metadataAttributePrefix=\"Meta-\"\n       \n        cipherSuites=\"DEFAULT:!EXP:!LOW:!aNULL:!eNULL:!DES:!IDEA:!SEED:!RC4:!3DES:!kRSA:!SSLv2:!SSLv3:!TLSv1:!TLSv1.1\">\n\n        <Sessions lifetime=\"28800\" timeout=\"3600\" checkAddress=\"false\"\n            handlerURL=\"/Shibboleth.sso\" handlerSSL=\"false\" cookieProps=\"https\" relayState=\"ss:mem\"\n            redirectLimit=\"exact\" idpHistory=\"false\" idpHistoryDays=\"7\">\n\n            <SSO entityID=\"https://idp.example.org/idp/shibboleth\">\n                SAML2\n            </SSO>\n\n            <LogoutInitiator type=\"Chaining\" Location=\"/Logout\"\
+    >\n                <LogoutInitiator type=\"SAML2\" template=\"bindingTemplate.html\"/>\n                <LogoutInitiator type=\"Local\"/>\n            </LogoutInitiator>\n\n            <md:SingleLogoutService Location=\"/SLO/SOAP\"\n                Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:SOAP\"/>\n            <md:SingleLogoutService Location=\"/SLO/Redirect\" conf:template=\"bindingTemplate.html\"\n                Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect\"/>\n\n            <Handler type=\"MetadataGenerator\" Location=\"/Metadata\" signing=\"false\"/>\n            <Handler type=\"Status\" Location=\"/Status\" acl=\"127.0.0.1 ::1\"/>\n            <Handler type=\"Session\" Location=\"/Session\" showAttributeValues=\"false\"/>\n            <Handler type=\"DiscoveryFeed\" Location=\"/DiscoFeed\"/>\n\n        </Sessions>\n\n        <MetadataProvider type=\"XML\" validate=\"false\"\n            path=\"/etc/shibboleth/idp-metadata.xml\"/>\n\n        <TrustEngine type=\"\
+    ExplicitKey\"/>\n\n        <AttributeExtractor type=\"XML\" validate=\"true\" reloadChanges=\"false\" path=\"attribute-map.xml\"/>\n        <AttributeExtractor type=\"Metadata\" errorURL=\"errorURL\" DisplayName=\"displayName\"/>\n\n        <!-- AttributeResolver removed: Keycloak has no SAML AttributeQuery endpoint;\n         assertion attributes are extracted directly (attribute-map.xml). -->\n\n        <AttributeFilter type=\"XML\" validate=\"true\" path=\"attribute-filter.xml\"/>\n\n        <CredentialResolver type=\"File\" use=\"signing\"\n            key=\"sp-signing.key\" certificate=\"sp-signing.crt\"/>\n        <CredentialResolver type=\"File\" use=\"encryption\"\n            key=\"sp-encryption.key\" certificate=\"sp-encryption.crt\"/>\n\n    </ApplicationDefaults>\n\n    <SecurityPolicyProvider type=\"XML\" validate=\"true\" path=\"security-policy.xml\"/>\n    <ProtocolProvider type=\"XML\" validate=\"true\" reloadChanges=\"false\" path=\"protocols.xml\"/>\n\n</SPConfig>"
+  attribute-map.xml: "<Attributes xmlns=\"urn:mace:shibboleth:2.0:attribute-map\"\n    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n\n    <!-- KC sends eppn as bare username (unscoped); ScopedAttributeDecoder would drop it -->\n    <Attribute name=\"urn:oid:1.3.6.1.4.1.5923.1.1.1.6\" id=\"eppn\">\n        <AttributeDecoder xsi:type=\"StringAttributeDecoder\" caseSensitive=\"false\"/>\n    </Attribute>\n\n    <Attribute name=\"urn:oid:0.9.2342.19200300.100.1.1\" id=\"uid\"/>\n    <Attribute name=\"urn:oid:0.9.2342.19200300.100.1.3\" id=\"mail\"/>\n    <Attribute name=\"urn:oid:2.5.4.42\" id=\"givenName\"/>\n    <Attribute name=\"urn:oid:2.5.4.4\" id=\"sn\"/>\n    <Attribute name=\"urn:oid:2.16.840.1.113730.3.1.241\" id=\"displayName\"/>\n</Attributes>\n"
+  attribute-filter.xml: "<AttributeFilterPolicyGroup id=\"sogo5\"\n    xmlns=\"urn:mace:shibboleth:2.0:afp\"\n    xmlns:basic=\"urn:mace:shibboleth:2.0:afp:mf:basic\"\n    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n    xsi:schemaLocation=\"urn:mace:shibboleth:2.0:afp /usr/share/xml/shibboleth/shibboleth-2.0-afp.xsd urn:mace:shibboleth:2.0:afp:mf:basic /usr/share/xml/shibboleth/shibboleth-2.0-afp-mf-basic.xsd\">\n\n  <AttributeFilterPolicy id=\"sogo5\">\n    <PolicyRequirementRule xsi:type=\"basic:ANY\"/>\n    <AttributeRule attributeID=\"uid\"><PermitValueRule xsi:type=\"basic:ANY\"/></AttributeRule>\n    <AttributeRule attributeID=\"eppn\"><PermitValueRule xsi:type=\"basic:ANY\"/></AttributeRule>\n    <AttributeRule attributeID=\"mail\"><PermitValueRule xsi:type=\"basic:ANY\"/></AttributeRule>\n    <AttributeRule attributeID=\"givenName\"><PermitValueRule xsi:type=\"basic:ANY\"/></AttributeRule>\n    <AttributeRule attributeID=\"sn\"><PermitValueRule xsi:type=\"basic:ANY\"\
+    /></AttributeRule>\n    <AttributeRule attributeID=\"displayName\"><PermitValueRule xsi:type=\"basic:ANY\"/></AttributeRule>\n  </AttributeFilterPolicy>\n\n</AttributeFilterPolicyGroup>\n"
+  idp-metadata.xml: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- PLACEHOLDER IdP metadata (PoC, IdP-agnostic). Keep shibd metadata-green\n     until the target federation onboarding delivers the real metadata +\n     signing cert. SSO redirects land on the placeholder host and fail there\n     BY DESIGN. Swap entityID + metadata when federation lands. -->\n<EntityDescriptor xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\"\n    entityID=\"https://idp.example.org/shibboleth\"\n    validUntil=\"2036-01-01T00:00:00Z\">\n  <IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\">\n    <NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDFormat>\n    <SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect\"\n        Location=\"https://idp.example.org/SAML2/SSO/Redirect\"/>\n    <SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\"\n        Location=\"https://idp.example.org/SAML2/SSO/POST\"\
+    />\n  </IDPSSODescriptor>\n</EntityDescriptor>\n"
+  shibboleth.apache.conf: "\nProxyRequests Off\nProxyPreserveHost On\nSetEnv proxy-nokeepalive 1\n\nProxyPass /SOGo http://127.0.0.1:20000/SOGo retry=0 nocanon\n\n<Proxy http://127.0.0.1:20000/SOGo>\n  <IfModule headers_module>\n    RequestHeader set \"x-webobjects-server-port\" \"443\"\n    SetEnvIf Host (.*) HTTP_HOST=$1\n    RequestHeader set \"x-webobjects-server-name\" \"%{HTTP_HOST}e\" env=HTTP_HOST\n    RequestHeader set \"x-webobjects-server-url\" \"https://%{HTTP_HOST}e\" env=HTTP_HOST\n    RequestHeader unset \"x-webobjects-remote-user\"\n    RequestHeader set \"x-webobjects-server-protocol\" \"HTTP/1.0\"\n  </IfModule>\n  AddDefaultCharset UTF-8\n</Proxy>\n\n# sogod builds redirects with http:// — force https to the public host\nHeader edit Location \"^http://(webmail\\.example\\.org|127\\.0\\.0\\.1:20000)/\" \"https://webmail.example.org/\"\n\n<Location /Shibboleth.sso>\n  SetHandler shib\n</Location>\n<Location /Shibboleth.sso/Metadata>\n  SetHandler shib\n</Location>\n"
+  ssl-vhost.conf: "# TLS backend hop for haproxy ingress (backend-protocol=https):\n# mod_shib must see scheme=https to build the correct ACS URL.\n# (Listen 443 comes from the image ports.conf under IfModule ssl_module)\n<VirtualHost *:443>\n    SSLEngine on\n    # self-signed SP cert reused as backend cert (LB does not verify)\n    SSLCertificateFile /etc/shibboleth/sp-signing.crt\n    SSLCertificateKeyFile /etc/shibboleth/sp-signing.key\n</VirtualHost>\n"
+  webres-apache.conf: "# SOGo classic UI static resources, copied from the sogo image by the\n# copy-webresources initContainer. Without this alias the WebUI renders\n# unstyled (css/js 404 behind the TLS vhost).\nAlias /SOGo.woa/WebServerResources /var/www/sogo-webres\n<Directory /var/www/sogo-webres>\n    Options -Indexes +FollowSymLinks\n    AllowOverride None\n    Require all granted\n</Directory>\n"
+  native.logger: 'log4j.rootCategory=DEBUG, native_log
+
+    log4j.appender.native_log=org.apache.log4j.RollingFileAppender
+
+    log4j.appender.native_log.maxFileSize=100000000
+
+    log4j.appender.native_log.maxBackupIndex=4
+
+    log4j.appender.native_log.layout=org.apache.log4j.PatternLayout
+
+    log4j.appender.native_log.layout.ConversionPattern=%d{%Y-%m-%d %H:%M:%S} %p %c %x: %m%n
+
+    log4j.appender.native_log.File=/tmp/shibboleth/native-warn.log
+
+    '
+  shibd.logger: 'log4j.rootCategory=DEBUG, shibd_log, console_log
+
+    log4j.appender.shibd_log=org.apache.log4j.RollingFileAppender
+
+    log4j.appender.shibd_log.maxFileSize=100000000
+
+    log4j.appender.shibd_log.maxBackupIndex=4
+
+    log4j.appender.shibd_log.layout=org.apache.log4j.PatternLayout
+
+    log4j.appender.shibd_log.layout.ConversionPattern=%d{%Y-%m-%d %H:%M:%S} %p %c %x: %m%n
+
+    log4j.appender.shibd_log.File=/tmp/shibboleth/shibd.log
+
+    log4j.appender.console_log=org.apache.log4j.ConsoleAppender
+
+    log4j.appender.console_log.layout=org.apache.log4j.PatternLayout
+
+    log4j.appender.console_log.layout.ConversionPattern=%d{%Y-%m-%d %H:%M:%S} %p %c %x: %m%n
+
+    '

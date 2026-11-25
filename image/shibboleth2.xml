@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shibboleth SP 3.x configuration for Example SOGo5 sidecar.
+  SPDX-License-Identifier: Apache-2.0
+  Runtime overridden by ConfigMap mounts (deployment).
+  Built from the packaged example-shibboleth2.xml (validated against 3.x XSD).
+-->
+<SPConfig xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    clockSkew="180">
+
+    <OutOfProcess logger="shibd.logger"/>
+    <InProcess logger="native.logger"/>
+
+    <UnixListener address="shibd.sock"/>
+
+    <StorageService type="Memory" id="mem" cleanupInterval="900"/>
+    <SessionCache type="StorageService" StorageService="mem" cacheAssertions="false"
+                  cacheAllowance="900" inprocTimeout="900" cleanupInterval="900"/>
+    <ReplayCache StorageService="mem"/>
+    <ArtifactMap artifactTTL="180"/>
+
+    <RequestMapper type="Native">
+        <RequestMap>
+            <Host name="webmail.example.org">
+                <Path name="sogo-secure" authType="shibboleth" requireSession="true"/>
+            </Host>
+        </RequestMap>
+    </RequestMapper>
+
+    <ApplicationDefaults entityID="https://webmail.example.org/shibboleth-sp"
+        REMOTE_USER="eppn"
+        metadataAttributePrefix="Meta-"
+        sessionHook="/Shibboleth.sso/AttrChecker"
+        cipherSuites="DEFAULT:!EXP:!LOW:!aNULL:!eNULL:!DES:!IDEA:!SEED:!RC4:!3DES:!kRSA:!SSLv2:!SSLv3:!TLSv1:!TLSv1.1">
+
+        <Sessions lifetime="28800" timeout="3600" checkAddress="false"
+            handlerURL="/Shibboleth.sso" handlerSSL="false" cookieProps="http" relayState="ss:mem"
+            redirectLimit="exact" idpHistory="false" idpHistoryDays="7">
+
+            <!-- IdP-agnostisch: Discovery-Service der Ziel-Foederation hier
+                 setzen (DiscoveryURL + ggfs. entityID). Konkretes Beispiel
+                 For a real federation, replace discovery + metadata accordingly. -->
+            <SSO discoveryProtocol="SAMLDS"
+                 discoveryURL="&lt;DS-URL-DER-FOEDERATION&gt;">
+                SAML2
+            </SSO>
+
+            <md:AssertionConsumerService Location="/SAML2/POST" index="1"
+                Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"/>
+
+            <LogoutInitiator type="Chaining" Location="/Logout">
+                <LogoutInitiator type="SAML2" template="bindingTemplate.html"/>
+                <LogoutInitiator type="Local"/>
+            </LogoutInitiator>
+
+            <md:SingleLogoutService Location="/SLO/SOAP"
+                Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"/>
+            <md:SingleLogoutService Location="/SLO/Redirect" conf:template="bindingTemplate.html"
+                Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"/>
+
+            <Handler type="MetadataGenerator" Location="/Metadata" signing="false"/>
+            <Handler type="Status" Location="/Status" acl="127.0.0.1 ::1"/>
+            <Handler type="Session" Location="/Session" showAttributeValues="false"/>
+            <Handler type="DiscoveryFeed" Location="/DiscoFeed"/>
+
+        </Sessions>
+
+        <!-- IdP-Metadaten als Datei (austauschbar per ConfigMap/Secret-Mount ohne
+             Image-Rebuild). Signature-MetadataFilter mit idp-signing.crt
+             aktivieren, sobald das Foederations-Signing-Cert vorliegt. -->
+        <MetadataProvider type="XML" validate="false"
+            url="file:///etc/shibboleth/idp-metadata.xml"/>
+        <!--
+        <MetadataProvider type="XML" validate="true"
+            url="<IdP-Metadaten-URL>"
+            backingFilePath="/etc/shibboleth/idp-metadata.xml" maxRefreshDelay="7200">
+            <MetadataFilter type="RequireValidUntil" maxValidityInterval="2419200"/>
+            <MetadataFilter type="Signature" certificate="idp-signing.crt" verifyBackup="false"/>
+            <DiscoveryFilter type="Exclude"
+              matcher="EntityAttributes" trimTags="true"
+              attributeName="http://macedir.org/entity-category"
+              attributeNameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri"
+              attributeValue="http://refeds.org/category/hide-from-discovery"/>
+        </MetadataProvider>
+        -->
+
+        <TrustEngine type="ExplicitKey"/>
+
+        <AttributeExtractor type="XML" validate="true" reloadChanges="false" path="attribute-map.xml"/>
+        <AttributeExtractor type="Metadata" errorURL="errorURL" DisplayName="displayName"/>
+
+        <AttributeResolver type="Query" subjectMatch="true"/>
+
+        <AttributeFilter type="XML" validate="true" path="attribute-filter.xml"/>
+
+        <CredentialResolver type="File" use="signing"
+            key="sp-signing.key" certificate="sp-signing.crt"/>
+        <CredentialResolver type="File" use="encryption"
+            key="sp-encryption.key" certificate="sp-encryption.crt"/>
+
+    </ApplicationDefaults>
+
+    <SecurityPolicyProvider type="XML" validate="true" path="security-policy.xml"/>
+    <ProtocolProvider type="XML" validate="true" reloadChanges="false" path="protocols.xml"/>
+
+</SPConfig>

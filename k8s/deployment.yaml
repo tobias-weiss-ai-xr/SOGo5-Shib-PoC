@@ -1,0 +1,590 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: app
+    app.kubernetes.io/instance: sogo5
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: sogo
+    app.kubernetes.io/part-of: sogo5-sso
+    app.kubernetes.io/version: 5.8.0
+    de.container.gov.component: sogo5
+    de.container.gov.security-level: enhanced
+    example.org.version: 5.8.0
+    example.org/component: mail-calendar-contacts
+  name: sogo5
+  namespace: sogo5
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: sogo
+      component: app
+      version: 5.8.0
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        checksum/config: ${HASH_CONFIG:-default}
+        checksum/secret: ${HASH_SECRET:-default}
+        example.org/deployment-time: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      labels:
+        app: sogo
+        component: app
+        network-policy: allow-internal
+        prometheus.io/scrape: 'false'
+        version: 5.8.0
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - ssd
+            weight: 100
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+            weight: 50
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sogo
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      containers:
+      - env:
+        - name: PUID
+          value: ''
+        - name: PGID
+          value: ''
+        - name: DB_HOST
+          value: mariadb-galera.example.svc.cluster.local
+        - name: DB_PORT
+          value: '3306'
+        - name: DB_NAME
+          value: sogo5
+        - name: DB_USER
+          value: sogo5
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: db-password
+              name: sogo5-secrets
+        - name: LDAP_HOST
+          value: openldap.example.svc.cluster.local
+        - name: LDAP_PORT
+          value: '389'
+        - name: LDAP_BASE_DN
+          value: dc=example,dc=org
+        - name: LDAP_BIND_DN
+          value: cn=admin,dc=example,dc=org
+        - name: LDAP_BIND_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: LDAP_BIND_PASSWORD
+              name: sogo5-ldap-secret
+        - name: IMAP_HOST
+          value: stalwart.example.svc.cluster.local
+        - name: IMAP_PORT
+          value: '993'
+        - name: SMTP_HOST
+          value: postfix.example.svc.cluster.local
+        - name: SMTP_PORT
+          value: '587'
+        - name: SIEVE_HOST
+          value: stalwart.example.svc.cluster.local
+        - name: SIEVE_PORT
+          value: '4190'
+        - name: SOGO_TIMEZONE
+          value: Europe/Berlin
+        - name: SOGO_LANGUAGE
+          value: German
+        - name: SOGO_HOSTNAME
+          value: webmail.example.org
+        - name: SOGO_MAIL_DOMAINS
+          value: example.org,example.org
+        - name: SOGO_WORKERS_COUNT
+          value: '10'
+        - name: SOGO_MAX_THREADS
+          value: '100'
+        - name: SOGO_MAX_DB_CONNECTIONS
+          value: '20'
+        - name: SOGO_LOG_LEVEL
+          value: '1'
+        - name: SOGO_DEBUG_REQUESTS
+          value: 'NO'
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: TZ
+          value: Europe/Berlin
+        - name: SOGO_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: sogo5-oidc-client-secret
+              name: sogo5-oidc-secrets
+        envFrom:
+        - configMapRef:
+            name: sogo5-config
+            optional: true
+        image: registry.example.org/sogo/sogo:bookworm-5.12
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - echo 'SOGo 5 started in pod $(POD_NAME)' > /var/log/sogo/startup.log; touch /tmp/sogo-ready
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - echo 'Shutting down SOGo...'; pkill -TERM -u 999; sleep 60; pkill -KILL -u 999; echo 'SOGo stopped'
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /SOGo
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 10
+        name: sogo5
+        ports:
+        - containerPort: 20000
+          name: http
+          protocol: TCP
+        - containerPort: 20001
+          name: https
+          protocol: TCP
+        - containerPort: 20002
+          name: dav
+          protocol: TCP
+        - containerPort: 20003
+          name: activesync
+          protocol: TCP
+        - containerPort: 20004
+          name: admin
+          protocol: TCP
+        - containerPort: 11211
+          name: memcached
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /SOGo
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - CHOWN
+            - DAC_OVERRIDE
+            - FOWNER
+            - SETGID
+            - SETUID
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /SOGo
+            port: 8080
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+        terminationMessagePath: /tmp/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/lib/sogo
+          name: sogo5-data
+          subPath: data
+        - mountPath: /var/log/sogo
+          name: sogo5-logs
+          subPath: logs
+        - mountPath: /var/spool/sogo
+          name: sogo5-attachments
+          subPath: attachments
+        - mountPath: /tmp/sogo
+          name: sogo5-tmp
+          subPath: tmp
+        - mountPath: /etc/sogo/sogo.conf
+          name: sogo-rendered
+          readOnly: true
+          subPath: sogo.conf
+        - mountPath: /etc/apache2/ports.conf
+          name: sogo5-config
+          readOnly: true
+          subPath: ports.conf
+        - mountPath: /var/run/sogo
+          name: sogo5-pid
+          readOnly: false
+        - mountPath: /etc/localtime
+          name: tz-config
+          readOnly: true
+          subPath: localtime
+        - mountPath: /etc/timezone
+          name: tz-config
+          readOnly: true
+          subPath: timezone
+        - mountPath: /healthcheck.sh
+          name: scripts
+          readOnly: true
+          subPath: healthcheck.sh
+        - mountPath: /startup-probe.sh
+          name: scripts
+          readOnly: true
+          subPath: startup-probe.sh
+      - env:
+        - name: SHIBBOLETH_ENTITY_ID
+          value: https://webmail.example.org/shibboleth-sp
+        image: registry.example.org/shibboleth-sp/shibboleth-sp:0.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /SOGo
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: shibboleth-sp
+        ports:
+        - containerPort: 80
+          name: shib-http
+          protocol: TCP
+        - containerPort: 443
+          name: shib-https
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /SOGo
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1001
+        volumeMounts:
+        - mountPath: /etc/apache2/conf-enabled/00-ssl.conf
+          name: shibboleth-config
+          readOnly: true
+          subPath: ssl-vhost.conf
+        - mountPath: /etc/shibboleth/shibboleth.apache.conf
+          name: shibboleth-config
+          readOnly: true
+          subPath: shibboleth.apache.conf
+        - mountPath: /etc/shibboleth/shibboleth2.xml
+          name: shibboleth-config
+          readOnly: true
+          subPath: shibboleth2.xml
+        - mountPath: /etc/shibboleth/idp-metadata.xml
+          name: shibboleth-config
+          readOnly: true
+          subPath: idp-metadata.xml
+        - mountPath: /etc/shibboleth/attribute-filter.xml
+          name: shibboleth-config
+          readOnly: true
+          subPath: attribute-filter.xml
+        - mountPath: /etc/shibboleth/sp-signing.key
+          name: shibboleth-sp-cert
+          readOnly: true
+          subPath: sp-signing.key
+        - mountPath: /etc/shibboleth/sp-signing.crt
+          name: shibboleth-sp-cert
+          readOnly: true
+          subPath: sp-signing.crt
+        - mountPath: /etc/shibboleth/sp-encryption.key
+          name: shibboleth-sp-cert
+          readOnly: true
+          subPath: sp-encryption.key
+        - mountPath: /etc/shibboleth/sp-encryption.crt
+          name: shibboleth-sp-cert
+          readOnly: true
+          subPath: sp-encryption.crt
+        - mountPath: /etc/apache2/conf-enabled/01-webres.conf
+          name: shibboleth-config
+          readOnly: true
+          subPath: webres-apache.conf
+        - mountPath: /var/www/sogo-webres
+          name: sogo-webres
+          readOnly: true
+        - mountPath: /tmp/shibboleth
+          name: shibboleth-cache
+          readOnly: false
+        - mountPath: /etc/shibboleth/attribute-map.xml
+          name: shibboleth-config
+          readOnly: true
+          subPath: attribute-map.xml
+      - image: registry.opencode.de/bmi/opendesk/components/community/images-mirror/memcached:1.6.38-debian-12-r3
+        name: memcached
+        resources:
+          limits:
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 16Mi
+      hostname: sogo5-pod
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - 'set -eu
+
+          : "${DB_PASSWORD:?DB_PASSWORD must be set}"
+
+          : "${DB_HOST:?DB_HOST must be set}"
+
+          : "${SOGO_HOSTNAME:?SOGO_HOSTNAME must be set}"
+
+          : "${LDAP_HOST:?LDAP_HOST must be set}"
+
+          : "${LDAP_BASE_DN:?LDAP_BASE_DN must be set}"
+
+          : "${LDAP_BIND_DN:?LDAP_BIND_DN must be set}"
+
+          : "${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD must be set}"
+
+          envsubst < /template/sogo.conf.tmpl > /rendered/sogo.conf
+
+          chmod 640 /rendered/sogo.conf
+
+          chown 999:999 /rendered/sogo.conf
+
+          echo "sogo.conf rendered"
+
+          '
+        env:
+        - name: DB_HOST
+          value: mariadb-galera.example.svc.cluster.local
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: db-password
+              name: sogo5-secrets
+        - name: SOGO_HOSTNAME
+          value: webmail.example.org
+        - name: LDAP_HOST
+          value: openldap.example.svc.cluster.local
+        - name: LDAP_BASE_DN
+          value: dc=example,dc=org
+        - name: LDAP_BIND_DN
+          value: cn=admin,dc=example,dc=org
+        - name: LDAP_BIND_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: LDAP_BIND_PASSWORD
+              name: sogo5-ldap-secret
+        - name: IMAP_HOST
+          value: stalwart.example.svc.cluster.local
+        - name: SMTP_HOST
+          value: postfix.example.svc.cluster.local
+        - name: SIEVE_HOST
+          value: stalwart.example.svc.cluster.local
+        - name: SOGO_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: sogo5-oidc-client-secret
+              name: sogo5-oidc-secrets
+        image: registry.example.org/sogo/sogo:bookworm-5.12
+        imagePullPolicy: IfNotPresent
+        name: render-sogo-conf
+        volumeMounts:
+        - mountPath: /template
+          name: sogo5-config
+          readOnly: true
+        - mountPath: /rendered
+          name: sogo-rendered
+      - command:
+        - /bin/sh
+        - -c
+        - 'set -eu
+
+          cp -a /usr/lib/GNUstep/SOGo/WebServerResources/. /webres/
+
+          chmod -R a+rX /webres
+
+          echo "webresources copied: $(find /webres -type f | wc -l) files"
+
+          '
+        image: registry.example.org/sogo/sogo:bookworm-5.12
+        imagePullPolicy: IfNotPresent
+        name: copy-webresources
+        volumeMounts:
+        - mountPath: /webres
+          name: sogo-webres
+      resources:
+        limits:
+          cpu: '4'
+          memory: 4Gi
+        requests:
+          cpu: '1'
+          memory: 2Gi
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        supplementalGroups: []
+      subdomain: sogo5-headless
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: sogo
+      topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app: sogo
+            version: 5.8.0
+        maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+      volumes:
+      - name: sogo5-data
+        persistentVolumeClaim:
+          claimName: sogo5-data
+      - name: sogo5-logs
+        persistentVolumeClaim:
+          claimName: sogo5-logs
+      - name: sogo5-attachments
+        persistentVolumeClaim:
+          claimName: sogo5-attachments
+      - name: sogo5-tmp
+        persistentVolumeClaim:
+          claimName: sogo5-tmp
+      - emptyDir:
+          medium: Memory
+        name: sogo-rendered
+      - configMap:
+          defaultMode: 420
+          name: sogo5-config
+        name: sogo5-config
+      - emptyDir: {}
+        name: sogo5-pid
+      - configMap:
+          items:
+          - key: localtime
+            path: localtime
+          - key: timezone
+            path: timezone
+          name: timezone-config
+        name: tz-config
+      - configMap:
+          defaultMode: 509
+          items:
+          - key: healthcheck.sh
+            path: healthcheck.sh
+          - key: startup-probe.sh
+            path: startup-probe.sh
+          name: sogo5-config
+        name: scripts
+      - name: shibboleth-sp-cert
+        secret:
+          defaultMode: 256
+          secretName: shibboleth-sp-cert
+      - emptyDir: {}
+        name: shibboleth-cache
+      - emptyDir: {}
+        name: sogo-webres
+      - configMap:
+          defaultMode: 292
+          name: sogo5-shibboleth-config
+        name: shibboleth-config
+---
+apiVersion: v1
+data:
+  localtime: '# Copied from host at /usr/share/zoneinfo/Europe/Berlin
+
+    # This is a symbolic link to the actual timezone file
+
+    # In container, we copy the content
+
+    # Generated with: cp /usr/share/zoneinfo/Europe/Berlin /tmp/berlin && hexdump -C /tmp/berlin
+
+    # But for portability, we use the timezone name
+
+    # Actual implementation uses /etc/localtime mounted from host
+
+
+    # This is a placeholder. The actual timezone file is copied
+
+    # during container build or mounted from the host.
+
+    # For this ConfigMap approach, we need the actual file content.
+
+
+    # Alternative: Use the timezone name and let the OS handle it
+
+    Europe/Berlin
+
+    '
+  timezone: Europe/Berlin
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: timezone
+    app.kubernetes.io/part-of: sogo5-sso
+  name: timezone-config
+  namespace: sogo5

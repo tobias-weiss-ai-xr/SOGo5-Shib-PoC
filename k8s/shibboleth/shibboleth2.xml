@@ -1,0 +1,47 @@
+<SPConfig xmlns="urn:mace:shibboleth:2.0:native:sp:config"
+          xmlns:conf="urn:mace:shibboleth:2.0:native:sp:config"
+          xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+          xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+          xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+          clockSkew="180" logger="syslog" logLevel="INFO">
+
+  <ApplicationDefaults entityID="https://webmail.example.org/shibboleth-sp"
+                       REMOTE_USER="eppn" homeURL="https://webmail.example.org/SOGo">
+    
+    <Sessions lifetime="28800" timeout="3600" checkAddress="false"
+              handlerURL="/Shibboleth.sso" redirectURL="/Shibboleth.sso/DS"
+              redirectLimit="exact" idpHistory="true" idpHistoryDays="7">
+      
+      <!-- IdP-agnostisch: DS-URL der Zielfoederation einsetzen (Beispiel
+           For a real federation, replace discovery + metadata accordingly. -->
+      <SSO entityID="https://id.example.org/realms/sogo5">
+        SAML2 SAML1
+      </SSO>
+      
+      <Logout>SAML2 Local</Logout>
+      
+      <Handler type="Session" Location="/Shibboleth.sso/Session" showMethod="true"/>
+      <Handler type="Status" Location="/Shibboleth.sso/Status" acl="127.0.0.1"/>
+      <Handler type="MetadataGenerator" Location="/Shibboleth.sso/Metadata" signing="true"/>
+      <Handler type="Admin" Location="/Shibboleth.sso/Admin" acl="127.0.0.1"/>
+    </Sessions>
+    
+    <AttributeFilter type="XML" validate="true" path="attribute-filter.xml"/>
+    
+  </ApplicationDefaults>
+
+  <Applications>
+    <Application id="sogo5" policyId="sogo5-policy"/>
+  </Applications>
+
+  <!-- Echte IdP-Metadaten per Mount (kein Image-Rebuild); Signature-Filter
+       mit idp-signing.crt aktivieren, sobald das Foederations-Cert vorliegt -->
+  <MetadataProvider type="XML" validate="false"
+                    url="file:///etc/shibboleth/idp-metadata.xml"/>
+
+  <!-- security/protocol providers ship inside the image (protocols.xml,
+       security-policy.xml) - not mounted over by the ConfigMap -->
+  <SecurityPolicyProvider type="XML" validate="true" path="security-policy.xml"/>
+  <ProtocolProvider type="XML" validate="true" path="protocols.xml"/>
+
+</SPConfig>
