@@ -1,84 +1,82 @@
-# SOGo5 SSO PoC — webmail single sign-on without breaking mail clients
+# SOGo 5 SSO — webmail single sign-on without breaking mail clients
 
-> **The idea:** give SOGo 5 webmail proper single sign-on via Shibboleth —
-> **without ever touching the login path of Thunderbird, Outlook, or any
-> other mail client.** SSO is strictly a *webmail* concern; IMAP/SMTP clients
-> with saved passwords keep working unchanged.
+> **The idea:** give SOGo 5 webmail proper single sign-on through the
+> university Shibboleth identity provider — **without ever disrupting
+> Thunderbird, Outlook, K-9 and every other mail client.** SSO is a
+> *webmail* concern only; IMAP/SMTP clients with saved passwords simply
+> keep working.
 
 ## The trap this PoC avoids
 
-In a university setting, webmail users log in with the same account they use
-in Thunderbird & co. A naive SSO rollout (proxying all of SOGo behind a
-SAML gate) breaks every non-browser client, because the browser SSO
-credential never reaches IMAP/SMTP. This repository documents and implements
-the decomposition that avoids that trap:
+In an organisation, the same account logs into webmail and into the mail
+client. A naive SSO rollout that puts a SAML gate in front of the whole
+stack **breaks every non-browser client**, because the SSO credential from
+the browser never reaches IMAP/SMTP. This repository shows and implements
+the decomposition that avoids the trap: SSO stays on the webmail path, the
+mail servers and all clients that talk to them directly are left alone.
 
-| Login path | Users | Mechanism | State |
+## How it works
+
+![SOGo 5 SSO concept](docs/webmail-sso-overview.svg)
+
+One Kubernetes pod, one shared network namespace, two containers. The
+diagram shows both login paths — the SSO path (blue) and the untouched
+mail-client path (green):
+
+| Login path | Who | How | State |
 |---|---|---|---|
-| **Webmail (browser)** | humans, via central IdP | Shibboleth SP sidecar in front of SOGo → target: native OIDC | SP sidecar proven; OIDC is the decided end state |
-| **Mail clients** | Thunderbird, Outlook, K-9, … | password (or XOAUTH2) directly against IMAP/SMTP | untouched by design — quality goal #1: *no mail breakage* |
+| **Webmail (browser)** | humans | Shibboleth SP sidecar in front of SOGo → native OIDC as end state | SP sidecar proven; OIDC decided |
+| **Mail clients** | Thunderbird, Outlook, K-9, … | password / app password / XOAUTH2 directly against IMAP/SMTP | unchanged by design |
 
-## Architecture
-
-One Kubernetes pod, one shared network namespace, two containers:
-
-```
-Browser ──TLS──▶ Apache + mod_shib (SP sidecar, :443)
-                    │  /Shibboleth.sso/*  → shibd (SAML SP)
-                    │  everything else    → proxied to 127.0.0.1:8080
-                    ▼
-                 sogod (SOGo 5, :8080)
-                    │  REMOTE_USER / x-webobjects headers
-                    ▼
-                 LDAP (attributes) · IMAP/SMTP (XOAUTH2 or password)
-```
-
-- **SAML phase (proven in this PoC):** the sidecar terminates the IdP
-  session and hands `REMOTE_USER` to SOGo
-  (`SOGoTrustProxyAuthentication`). Works with any Shibboleth IdP;
-  metadata is mounted at runtime — the manifests ship **placeholders**.
+- **SAML phase (implemented here):** the sidecar terminates the IdP
+  session and hands `REMOTE_USER` (`uid`/`eppn`) to SOGo
+  (`SOGoTrustProxyAuthentication`). It works with any Shibboleth IdP;
+  metadata is mounted at runtime, the shipped manifests use placeholders.
 - **OIDC end state (decided):** SOGo speaks OIDC natively
-  (`SOGoAuthenticationType = openid`) against an IdP OIDC plugin, and the
-  webmail token doubles as the IMAP credential via **XOAUTH2**, validated
-  by the mail server against the IdP's **published JWKS — no shared
-  introspection secret, no master account**. Mail clients simply keep
-  using passwords; `sub`/`uid` mapping carries the mailbox identity.
+  (`SOGoAuthenticationType = openid`). The webmail token doubles as the
+  IMAP/SMTP credential via **XOAUTH2**, which the mail server validates
+  against the IdP's **published JWKS** — no shared introspection secret,
+  no master account. Mail clients are unaffected throughout.
 
 ## Repository layout
 
 | Path | Content |
 |---|---|
-| `image/` | Shibboleth-SP image (Apache + shibd, non-root, uid 1001 + `cap_net_bind_service`), idp-agnostic placeholder metadata |
-| `k8s/` | Kustomize manifests: SOGo5 deployment with SP sidecar (shared netns), ConfigMap, Ingress, NetworkPolicies |
-| `docs/arc42/` | Full arc42 architecture documentation (German): context, runtime, deployment view, ADRs, risk register |
-| `docs/IMPLEMENTATION.md` | Step-by-step federation onboarding & implementation guide |
+| `docs/webmail-sso-overview.svg` | Concept sketch (see above) |
+| `docs/arc42/` | Full arc42 architecture documentation (German): context, runtime, deployment, ADRs, risk register |
+| `docs/IMPLEMENTATION.md` | Step-by-step federation-onboarding & implementation guide |
+| `image/` | Shibboleth-SP image (Apache + mod_shib, non-root, uid 1001) |
+| `k8s/` | Kustomize manifests: SOGo deployment with SP sidecar, ConfigMap, Ingress, NetworkPolicies |
 
 ## Quickstart
 
 ```bash
-# Build the SP sidecar image and push to your registry
-docker build -t registry.example.org/shibboleth-sp:latest image/
+# 1. Build the SP sidecar image and push it to your registry
+docker build -t registry.example.org/shibboleth-sp/shibboleth-sp:0.1.0 image/
+docker push registry.example.org/shibboleth-sp/shibboleth-sp:0.1.0
 
-# Adjust registry + hostnames in k8s/kustomization.yaml, then deploy
+# 2. Point k8s/kustomization.yaml at your registry, image tags and hostname
+# 3. Deploy
 kubectl apply -k k8s/
 
-# SP alive?
+# 4. SP alive?
 curl -k https://webmail.example.org/Shibboleth.sso/Status
 ```
 
-Bring your own IdP: mount its metadata over `k8s/shibboleth/`'s placeholder
-ConfigMap, set the SSO `entityID` in `shibboleth2.xml`, and open egress to
-the IdP (see NetworkPolicy). Federation onboarding, SP registration and
-attribute release (`uid` vs `eppn`!) are organizational steps — the
-checklist lives in `docs/IMPLEMENTATION.md`.
+**Bring your own IdP:** mount its metadata over the placeholder ConfigMap,
+set the SSO `entityID` in `shibboleth2.xml`, and allow egress to the IdP
+(see NetworkPolicy). Federation onboarding, SP registration and attribute
+release (`uid` vs. `eppn`) are organisational steps — the checklist is in
+`docs/IMPLEMENTATION.md`.
 
 ## Status
 
 Showcase of a completed PoC: SP sidecar, signed AuthnRequests, egress and
-ingress verified against a real university IdP; OIDC/XOAUTH2 chain proven
-end-to-end in a dedicated test stack (Shibboleth IdP + Dovecot + SOGo).
-The production-wired variant (real metadata, network policies) lives in an
-internal repository; everything here is sanitized and placeholder-based.
+ingress verified against a real university IdP; the OIDC/XOAUTH2 chain was
+proven end-to-end in a dedicated test stack (Shibboleth IdP + Dovecot +
+SOGo). The production-wired variant (real metadata, network policies)
+lives in an internal repository; everything published here is sanitised
+and placeholder-based.
 
 ## License
 
